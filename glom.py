@@ -20,8 +20,13 @@ def waltz(root):
             yield((p, stat))
 
 def hash_file(path):
-    contents = open(path, 'rb').read()
-    return hashlib.sha1(contents).hexdigest()
+    f = open(path, 'rb')
+    hasher = hashlib.sha1()
+    while True:
+        block = f.read(64*1000*1000)
+        if not block:
+            return hasher.hexdigest()
+        hasher.update(block)
 
 
 if len(sys.argv) < 3:

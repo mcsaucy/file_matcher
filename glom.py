@@ -8,6 +8,7 @@ import sys
 
 
 ContentID = collections.namedtuple("ContentID", ["path", "size", "digest"])
+block_size_mb = int(os.environ.get("BLOCK_SIZE_MB", 64))
 
 
 def waltz(root):
@@ -23,7 +24,7 @@ def hash_file(path):
     f = open(path, 'rb')
     hasher = hashlib.sha1()
     while True:
-        block = f.read(64*1000*1000)
+        block = f.read(block_size_mb*1000*1000)
         if not block:
             return hasher.hexdigest()
         hasher.update(block)

@@ -1,7 +1,14 @@
 #!/usr/bin/python3
 
+import collections
+import hashlib
+import json
 import os
 import sys
+
+
+ContentID = collections.namedtuple("ContentID", ["path", "size", "digest"])
+
 
 def waltz(root):
     for root, _, files in os.walk(root):
@@ -11,6 +18,10 @@ def waltz(root):
             if stat.st_size < 1000 and not os.environ.get("INCLUDE_SMOL"):
                 continue
             yield((p, stat))
+
+def hash_file(path):
+    contents = open(path, 'rb').read()
+    return hashlib.sha1(contents).hexdigest()
 
 
 if len(sys.argv) < 3:
@@ -23,7 +34,37 @@ primary = sys.argv[1]
 secondaries = sys.argv[2:]
 
 primary_files = {p: stat for p, stat in waltz(primary)}
-by_size = {stat.st_size: (p, None) for p, stat in primary_files.items()}
+primaries_by_size = {}
+for p, stat in primary_files.items():
+    size = stat.st_size
+    have = primaries_by_size.get(size, [])
+    primaries_by_size[size] = have + [ContentID(p, stat.st_size, None)]
 
-print(primary_files)
-print(by_size)
+secondary_files = {}
+for s in secondaries:
+    secondary_files.update({p: stat for p, stat in waltz(s)})
+
+dupes = {}
+
+for p, stat in secondary_files.items():
+    size = stat.st_size
+    pcids = primaries_by_size.get(size)
+    if not pcids:
+        # nothing matches this in our primaries
+        continue
+    for pcid in pcids:
+        if not pcid.digest:
+            new_pcid = ContentID(pcid.path, pcid.size, hash_file(pcid.path))
+            primaries_by_size[size] = new_pcid
+            pcid = new_pcid
+
+        digest = hash_file(p)
+        if digest != pcid.digest:
+            continue
+
+        if pcid.path in dupes:
+            dupes[pcid.path]["matches"] += [p]
+        else:
+            dupes[pcid.path] = {"individual_size": size, "matches": [p]}
+
+print(json.dumps(dupes, sort_keys=True, indent=4))
